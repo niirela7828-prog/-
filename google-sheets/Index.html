@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2733;--muted:#5d6b7a;--line:#d5dce3;--accent:#1f6feb;--ok:#1a7f37;--err:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#11161c;--card:#1a222b;--ink:#e6edf3;--muted:#9aa7b4;--line:#2f3b47;--accent:#4c8dff;--ok:#3fb950;--err:#ff6b6b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Hebrew","Noto Sans Thai",sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 16px}
+h1{font-size:1.5rem;margin:0}
+.lang{font:inherit;color:var(--accent);font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 14px;background:var(--card);cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+label{display:block;font-weight:600;margin:14px 0 6px}
+label:first-child{margin-top:0}
+.req{color:var(--err)}
+input,textarea{width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:96px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+button.main{display:block;width:100%;margin-top:18px;font:inherit;font-weight:700;border:0;border-radius:10px;padding:12px 20px;background:var(--accent);color:#fff;cursor:pointer}
+button.main:disabled{opacity:.6;cursor:wait}
+.ok{color:var(--ok);font-weight:700;font-size:1.15rem}
+.err{color:var(--err);font-weight:700}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <button type="button" class="lang" id="langBtn"></button>
+  </header>
+  <p class="err" id="error" hidden></p>
+  <form class="card" id="form" novalidate>
+    <div id="fields"></div>
+    <button class="main" type="submit" id="sendBtn"></button>
+  </form>
+  <div class="card" id="done" hidden>
+    <p class="ok" id="okMsg"></p>
+    <button class="main" type="button" id="againBtn"></button>
+  </div>
+</main>
+<script>
+var FIELDS = <?!= fieldsJson ?>;
+var T = {
+  he: { dir: 'rtl', title: 'פתק עבודה', send: 'שליחה', sending: 'שולח…', sent: '✓ הפתק נשלח בהצלחה. תודה!',
+        another: 'מילוי פתק חדש', missing: 'יש למלא את כל שדות החובה', fail: 'השליחה נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.', other: 'ภาษาไทย' },
+  th: { dir: 'ltr', title: 'ใบงาน', send: 'ส่ง', sending: 'กำลังส่ง…', sent: '✓ ส่งใบงานเรียบร้อยแล้ว ขอบคุณ!',
+        another: 'กรอกใบงานใหม่', missing: 'กรุณากรอกช่องที่จำเป็นให้ครบ', fail: 'ส่งไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', other: 'עברית' }
+};
+var lang = /^th\b/i.test(navigator.language || '') ? 'th' : 'he';
+try { var saved = localStorage.getItem('lang'); if (saved === 'th' || saved === 'he') lang = saved; } catch (e) {}
+
+var $ = function (id) { return document.getElementById(id); };
+
+function buildFields() {
+  var box = $('fields');
+  FIELDS.forEach(function (f) {
+    var label = document.createElement('label');
+    label.htmlFor = 'f_' + f.name;
+    label.id = 'l_' + f.name;
+    box.appendChild(label);
+    var el = document.createElement(f.type === 'textarea' ? 'textarea' : 'input');
+    if (f.type !== 'textarea') el.type = f.type;
+    el.id = 'f_' + f.name;
+    el.name = f.name;
+    el.maxLength = 4000;
+    if (f.required) el.required = true;
+    box.appendChild(el);
+  });
+}
+
+function setToday() {
+  var d = $('f_date');
+  if (d && !d.value) { var n = new Date(); d.value = new Date(n - n.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); }
+}
+
+function applyLang() {
+  var t = T[lang];
+  document.documentElement.lang = lang;
+  document.documentElement.dir = t.dir;
+  document.title = t.title;
+  $('title').textContent = t.title;
+  $('langBtn').textContent = t.other;
+  $('sendBtn').textContent = t.send;
+  $('okMsg').textContent = t.sent;
+  $('againBtn').textContent = t.another;
+  FIELDS.forEach(function (f) {
+    var l = $('l_' + f.name);
+    l.textContent = f[lang];
+    if (f.required) { var s = document.createElement('span'); s.className = 'req'; s.textContent = ' *'; l.appendChild(s); }
+  });
+  $('error').hidden = true;
+}
+
+function showError(msg) { $('error').textContent = msg; $('error').hidden = false; window.scrollTo(0, 0); }
+
+$('langBtn').addEventListener('click', function () {
+  lang = lang === 'he' ? 'th' : 'he';
+  try { localStorage.setItem('lang', lang); } catch (e) {}
+  applyLang();
+});
+
+$('form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  var data = {}, missing = false;
+  FIELDS.forEach(function (f) {
+    var v = $('f_' + f.name).value.trim();
+    data[f.name] = v;
+    if (f.required && !v) missing = true;
+  });
+  if (missing) return showError(T[lang].missing);
+  $('error').hidden = true;
+  var btn = $('sendBtn');
+  btn.disabled = true; btn.textContent = T[lang].sending;
+  google.script.run
+    .withSuccessHandler(function () {
+      btn.disabled = false; btn.textContent = T[lang].send;
+      $('form').reset(); $('form').hidden = true; $('done').hidden = false; window.scrollTo(0, 0);
+    })
+    .withFailureHandler(function () {
+      btn.disabled = false; btn.textContent = T[lang].send;
+      showError(T[lang].fail);
+    })
+    .submitNote(data, lang);
+});
+
+$('againBtn').addEventListener('click', function () {
+  $('done').hidden = true; $('form').hidden = false; setToday();
+});
+
+buildFields();
+applyLang();
+setToday();
+</script>
+</body>
+</html>
