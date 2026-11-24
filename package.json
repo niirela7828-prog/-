@@ -1,0 +1,13 @@
+{
+  "name": "work-note",
+  "version": "1.0.0",
+  "private": true,
+  "description": "פתק עבודה – טופס לעובדים ועמוד ניהול עם סיסמה",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
