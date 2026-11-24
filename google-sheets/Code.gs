@@ -6,7 +6,7 @@
 // type: text | date | time | number | textarea
 // half: true = חצי רוחב (שני שדות באותה שורה, כמו בפתק)
 var FIELDS = [
-  { name: 'num',     type: 'text',     half: true, he: "מס'",        th: 'หมายเลข' },
+  { name: 'name',    type: 'text',     half: true, he: 'שם',         th: 'ชื่อ', required: true },
   { name: 'date',    type: 'date',     half: true, he: 'תאריך',      th: 'วันที่', required: true },
   { name: 'crop',    type: 'text',     half: true, he: 'גידול',      th: 'พืชที่ปลูก' },
   { name: 'plot',    type: 'text',     half: true, he: 'חלקה',       th: 'แปลง' },
