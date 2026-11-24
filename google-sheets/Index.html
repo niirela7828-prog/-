@@ -13,8 +13,11 @@ header{display:flex;justify-content:space-between;align-items:center;gap:12px;ma
 h1{font-size:1.5rem;margin:0}
 .lang{font:inherit;color:var(--accent);font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 14px;background:var(--card);cursor:pointer}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
-label{display:block;font-weight:600;margin:14px 0 6px}
-label:first-child{margin-top:0}
+#fields{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+.field{grid-column:1/-1;min-width:0}
+.field.half{grid-column:auto}
+.field.sep{border-top:1px solid var(--line);padding-top:14px}
+label{display:block;font-weight:600;margin:0 0 6px}
 .req{color:var(--err)}
 input,textarea{width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 textarea{min-height:96px;resize:vertical}
@@ -46,9 +49,9 @@ button.main:disabled{opacity:.6;cursor:wait}
 var FIELDS = <?!= fieldsJson ?>;
 var T = {
   he: { dir: 'rtl', title: 'פתק עבודה', send: 'שליחה', sending: 'שולח…', sent: '✓ הפתק נשלח בהצלחה. תודה!',
-        another: 'מילוי פתק חדש', missing: 'יש למלא את כל שדות החובה', fail: 'השליחה נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.', other: 'ภาษาไทย' },
+        another: 'מילוי פתק חדש', missing: 'יש למלא את כל שדות החובה', empty: 'הפתק ריק. יש למלא לפחות שדה אחד.', fail: 'השליחה נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.', other: 'ภาษาไทย' },
   th: { dir: 'ltr', title: 'ใบงาน', send: 'ส่ง', sending: 'กำลังส่ง…', sent: '✓ ส่งใบงานเรียบร้อยแล้ว ขอบคุณ!',
-        another: 'กรอกใบงานใหม่', missing: 'กรุณากรอกช่องที่จำเป็นให้ครบ', fail: 'ส่งไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', other: 'עברית' }
+        another: 'กรอกใบงานใหม่', missing: 'กรุณากรอกช่องที่จำเป็นให้ครบ', empty: 'ใบงานว่างเปล่า กรุณากรอกอย่างน้อยหนึ่งช่อง', fail: 'ส่งไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง', other: 'עברית' }
 };
 var lang = /^th\b/i.test(navigator.language || '') ? 'th' : 'he';
 try { var saved = localStorage.getItem('lang'); if (saved === 'th' || saved === 'he') lang = saved; } catch (e) {}
@@ -58,18 +61,34 @@ var $ = function (id) { return document.getElementById(id); };
 function buildFields() {
   var box = $('fields');
   FIELDS.forEach(function (f) {
+    var wrap = document.createElement('div');
+    wrap.className = 'field' + (f.half ? ' half' : '');
+    if (f.name === 'mat1' || f.name === 'qty1' || f.name === 'start' || f.name === 'end') wrap.className += ' sep';
     var label = document.createElement('label');
     label.htmlFor = 'f_' + f.name;
     label.id = 'l_' + f.name;
-    box.appendChild(label);
+    wrap.appendChild(label);
     var el = document.createElement(f.type === 'textarea' ? 'textarea' : 'input');
-    if (f.type !== 'textarea') el.type = f.type;
+    if (f.type === 'number') { el.type = 'number'; el.step = 'any'; el.min = '0'; el.inputMode = 'decimal'; }
+    else if (f.type !== 'textarea') el.type = f.type;
     el.id = 'f_' + f.name;
     el.name = f.name;
     el.maxLength = 4000;
     if (f.required) el.required = true;
-    box.appendChild(el);
+    wrap.appendChild(el);
+    box.appendChild(wrap);
   });
+}
+
+// Fill "total hours" from start/end times, unless the worker typed a value themselves.
+var totalAuto = true;
+function calcTotal() {
+  var s = $('f_start'), e = $('f_end'), t = $('f_total');
+  if (!s || !e || !t || !totalAuto || !s.value || !e.value) return;
+  var toMin = function (v) { var p = v.split(':'); return (+p[0]) * 60 + (+p[1]); };
+  var diff = toMin(e.value) - toMin(s.value);
+  if (diff < 0) diff += 24 * 60;
+  t.value = String(Math.round(diff / 60 * 100) / 100);
 }
 
 function setToday() {
@@ -105,13 +124,15 @@ $('langBtn').addEventListener('click', function () {
 
 $('form').addEventListener('submit', function (ev) {
   ev.preventDefault();
-  var data = {}, missing = false;
+  var data = {}, missing = false, filled = false;
   FIELDS.forEach(function (f) {
     var v = $('f_' + f.name).value.trim();
     data[f.name] = v;
     if (f.required && !v) missing = true;
+    if (v && f.type !== 'date') filled = true;
   });
   if (missing) return showError(T[lang].missing);
+  if (!filled) return showError(T[lang].empty);
   $('error').hidden = true;
   var btn = $('sendBtn');
   btn.disabled = true; btn.textContent = T[lang].sending;
@@ -128,10 +149,12 @@ $('form').addEventListener('submit', function (ev) {
 });
 
 $('againBtn').addEventListener('click', function () {
-  $('done').hidden = true; $('form').hidden = false; setToday();
+  $('done').hidden = true; $('form').hidden = false; totalAuto = true; setToday();
 });
 
 buildFields();
+['f_start', 'f_end'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('change', calcTotal); });
+if ($('f_total')) $('f_total').addEventListener('input', function () { totalAuto = this.value === ''; });
 applyLang();
 setToday();
 </script>
